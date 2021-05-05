@@ -1,3 +1,5 @@
+namespace("a_");
+
 // javascript-astar 0.4.1
 // http://github.com/bgrins/javascript-astar
 // Freely distributable under the MIT License.
@@ -385,47 +387,104 @@ BinaryHeap.prototype = {
 };
 
 var a_land, a_water;
-function aStarInit(){
-	var landTiles = [];
-	var waterTiles = [];
-	var pic = '';
-	for(var ty in MapTiles){
-		for(var tx in MapTiles[ty]){
-			if (typeof landTiles[tx] === 'undefined') landTiles[tx] = [];
-			if (typeof waterTiles[tx] === 'undefined') waterTiles[tx] = [];
+var a_objects = new Array(mapWidth).fill(0).map(()=>new Array(mapHeight).fill(0));
+
+//diagonal path true/false
+//draw map to console(stdout) true/false
+function aStarInit(diag=false, map=false){
+	const landTiles = new Array(mapWidth).fill(0).map(()=>new Array(mapHeight).fill(0));
+	const waterTiles = new Array(mapWidth).fill(0).map(()=>new Array(mapHeight).fill(0));
+	const o = enumArea(0,0,mapWidth,mapHeight,ALL_PLAYERS,false);
+
+	o.forEach((e)=>{
+		if(e.damageable === true)a_objects[e.x][e.y]=1;
+		else if(e.damageable === false)a_objects[e.x][e.y]=2;
+		else if(e.stattype == 5)a_objects[e.x][e.y]=3;
+		else if(e.type == 1)a_objects[e.x][e.y]=4;
+	});
+	
+	let pic = '';
+	for(const ty in MapTiles){
+		for(const tx in MapTiles[ty]){
+			let p='';
+			if(tx==0 || ty==0 || tx == mapWidth-1 || ty == mapHeight-1){
+				if(map)pic+='!';
+				landTiles[tx][ty] = 0;
+				waterTiles[tx][ty] = 0;
+				continue;
+			}
+
 			switch(MapTiles[ty][tx]['terrainType']) {
 				case 7:
 					landTiles[tx][ty] = 0;
 					waterTiles[tx][ty] = 1;
-					pic += '▒';
+					if(map)p = '▒';
 					break;
 				case 8:
 					landTiles[tx][ty] = 0;
 					waterTiles[tx][ty] = 0;
-					pic += '▓';
+					if(map)p = '▓';
 					break;
 				default: 
 					landTiles[tx][ty] = 1;
 					waterTiles[tx][ty] = 1;
-					pic += '░';
+					if(map)p = '░';
 			}
+			
+			switch(a_objects[tx][ty]){
+				case 1:		//Разрушаемый объект
+					if(map)p='@';
+					landTiles[tx][ty] = 10;
+					waterTiles[tx][ty] = 10;
+					break;
+				case 2:		//Неразрушаемый объект
+				case 3:		//Занятая нефтевышка (по сути неразрушаемый объект)
+					if(map)p='#';
+					landTiles[tx][ty] = 0;
+					waterTiles[tx][ty] = 0;
+					break;
+				case 4:		//Постройка игрока/мусорщиков
+					if(map)p='$';
+					landTiles[tx][ty] = 20;
+					waterTiles[tx][ty] = 20;
+					break;
+				default:
+					break;
+			}
+			
+			if(map)pic += p;
 		}
-		debug(pic);
-		pic='';
+		if(map){debug(pic);pic='';}
 	}
-	a_land = new Graph(landTiles);
-	a_water = new Graph(waterTiles);
-	debug("MOD: aStar");
+	if(diag){
+		a_land = new Graph(landTiles, {diagonal:true});
+		a_water = new Graph(waterTiles, {diagonal:true});
+	}
+	else{
+		a_land = new Graph(landTiles);
+		a_water = new Graph(waterTiles);
+	}
 }
 
 function aStarDist(start, finish, water=false){
+	let ret;
 	if(water){
-		var begin = a_water.grid[start.x][start.y];
-		var end = a_water.grid[finish.x][finish.y];
-		return astar.search(a_water, begin, end);
+		let begin = a_water.grid[start.x][start.y];
+		let end = a_water.grid[finish.x][finish.y];
+		ret=astar.search(a_water, begin, end);
+	}else{
+		let begin = a_land.grid[start.x][start.y];
+		let end = a_land.grid[finish.x][finish.y];
+		ret=astar.search(a_land, begin, end);
 	}
-	var begin = a_land.grid[start.x][start.y];
-	var end = a_land.grid[finish.x][finish.y];
-	return astar.search(a_land, begin, end);
+	
+	let path=[];
+	let obj=[];
+	ret.forEach((r)=>{
+		path.push({x:r.x,y:r.y});
+		if(a_objects[r.x][r.y])obj.push({x:r.x,y:r.y});
+	});
+	
+	return {path:path,obj:obj};
 }
-aStarInit();
+
